@@ -5,7 +5,7 @@ import polars as pl
 from rosbags.typesys.store import Typestore
 
 import aflux_ros
-from aflux_ros import ArrayNode, LeafNode, ListNode
+from aflux_ros import ArrayNode, LeafNode, ListNode, StructNode
 
 
 class TestMessageHelper:
@@ -37,27 +37,109 @@ class TestMessageHelper:
 
 
 class TestConvertMessagesIntoSeries:
-    def test_polars_ignores_explicit_dtype_in_favor_of_numpy_derived_value(self):
-        messages = [np.array([1, 2]), np.array([3, 4])]
+    def test_empty_messages_preserve_the_node_dtype(self) -> None:
+        node = ListNode(LeafNode("float64"))
 
-        explicit_dtype = pl.Array(pl.Float64, 2)
-        ser = pl.Series(messages, dtype=explicit_dtype)
-        assert ser.dtype != explicit_dtype, "Polars has fixed issue."
+        ser = aflux_ros.convert_messages_into_series(node, [])
 
-        explicit_dtype = pl.List(pl.Int64)
-        ser = pl.Series(messages, dtype=explicit_dtype)
-        assert ser.dtype != explicit_dtype, "Polars has fixed issue."
+        assert ser.dtype == node.to_dataframe_dtype()
+        assert ser.to_list() == []
 
-    def test_array(self):
-        messages = [np.array([1, 2]), np.array([3, 4])]
+    def test_leaf(self) -> None:
+        node = LeafNode("float64")
 
-        array_node = ArrayNode(LeafNode("float64"), 2)
-        ser = aflux_ros.convert_messages_into_series(array_node, messages)
-        assert ser.dtype == array_node.to_dataframe_dtype()
+        ser = aflux_ros.convert_messages_into_series(node, [1.0, 2.0])
 
-    def test_list(self):
-        messages = [np.array([1, 2]), np.array([3, 4])]
+        assert ser.dtype == pl.Float64
+        assert ser.to_list() == [1.0, 2.0]
 
-        list_node = ListNode(LeafNode("float64"))
-        ser = aflux_ros.convert_messages_into_series(list_node, messages)
-        assert ser.dtype == list_node.to_dataframe_dtype()
+    def test_struct(self) -> None:
+        node = StructNode(
+            "test_msgs/msg/Point",
+            {"x": LeafNode("float64"), "y": LeafNode("float64")},
+        )
+        messages = [{"x": 1.0, "y": 2.0}, {"x": 3.0, "y": 4.0}]
+
+        ser = aflux_ros.convert_messages_into_series(node, messages)
+
+        assert ser.dtype == node.to_dataframe_dtype()
+        assert ser.to_list() == [
+            {"x": 1.0, "y": 2.0},
+            {"x": 3.0, "y": 4.0},
+        ]
+
+    def test_array(self) -> None:
+        node = ArrayNode(LeafNode("float64"), 2)
+        messages = [np.array([1.0, 2.0]), np.array([3.0, 4.0])]
+
+        ser = aflux_ros.convert_messages_into_series(node, messages)
+
+        assert ser.dtype == node.to_dataframe_dtype()
+        assert ser.to_list() == [[1.0, 2.0], [3.0, 4.0]]
+
+    def test_list(self) -> None:
+        node = ListNode(LeafNode("float64"))
+        messages = [np.array([1.0]), np.array([2.0, 3.0])]
+
+        ser = aflux_ros.convert_messages_into_series(node, messages)
+
+        assert ser.dtype == node.to_dataframe_dtype()
+        assert ser.to_list() == [[1.0], [2.0, 3.0]]
+
+    def test_array_of_structs_with_nested_lists(self) -> None:
+        inner_node = StructNode(
+            "test_msgs/msg/Inner",
+            {"value": LeafNode("float64"), "values": ListNode(LeafNode("float64"))},
+        )
+        node = ArrayNode(inner_node, 2)
+        messages = [
+            [
+                {"value": 1.0, "values": np.array([1.1])},
+                {"value": 2.0, "values": np.array([2.1, 2.2])},
+            ],
+            [
+                {"value": 3.0, "values": np.array([3.1, 3.2])},
+                {"value": 4.0, "values": np.array([4.1])},
+            ],
+        ]
+
+        ser = aflux_ros.convert_messages_into_series(node, messages)
+
+        assert ser.dtype == node.to_dataframe_dtype()
+        assert ser.to_list() == [
+            [
+                {"value": 1.0, "values": [1.1]},
+                {"value": 2.0, "values": [2.1, 2.2]},
+            ],
+            [
+                {"value": 3.0, "values": [3.1, 3.2]},
+                {"value": 4.0, "values": [4.1]},
+            ],
+        ]
+
+    def test_list_of_structs_with_variable_lengths_and_empty_rows(self) -> None:
+        inner_node = StructNode(
+            "test_msgs/msg/Inner",
+            {"value": LeafNode("float64"), "values": ListNode(LeafNode("float64"))},
+        )
+        node = ListNode(inner_node)
+        messages = [
+            [],
+            [{"value": 1.0, "values": np.array([1.1])}],
+            [
+                {"value": 2.0, "values": np.array([2.1, 2.2])},
+                {"value": 3.0, "values": np.array([3.1])},
+            ],
+        ]
+
+        ser = aflux_ros.convert_messages_into_series(node, messages)
+
+        assert ser.dtype == node.to_dataframe_dtype()
+        assert ser.to_list() == [
+            [],
+            [{"value": 1.0, "values": [1.1]}],
+            [
+                {"value": 2.0, "values": [2.1, 2.2]},
+                {"value": 3.0, "values": [3.1]},
+            ],
+        ]
