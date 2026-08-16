@@ -1,11 +1,17 @@
 from abc import ABCMeta, abstractmethod
-from typing import Any, override
+from typing import Any, cast, override
 
 import numpy as np
 import numpy.typing as npt
 import polars as pl
 from rosbags.interfaces import Nodetype, Typestore
 from rosbags.interfaces.typing import Basename, FieldDesc
+
+type LeafValue = bool | int | float | str
+type StructValue = dict[str, MessageValue]
+type ArrayValue = npt.NDArray[np.number] | list[LeafValue] | list[StructValue]
+type ListValue = npt.NDArray[np.number] | list[LeafValue] | list[StructValue]
+type MessageValue = LeafValue | StructValue | ArrayValue | ListValue
 
 
 def _basename_to_dataframe_dtype(basename: Basename) -> pl.DataType:
@@ -87,7 +93,7 @@ class LeafNode(BaseNode):
         return f"{self.dtype}"
 
     @override
-    def dump_message(self, message: Any) -> Any:
+    def dump_message(self, message: Any) -> LeafValue:
         return message
 
     @override
@@ -117,7 +123,7 @@ class StructNode(BaseNode):
         return self.dtype
 
     @override
-    def dump_message(self, message: Any) -> dict[str, Any]:
+    def dump_message(self, message: Any) -> StructValue:
         return {
             field_name: field_node.dump_message(getattr(message, field_name))
             for field_name, field_node in self.field_node_map.items()
@@ -157,11 +163,11 @@ class ArrayNode(BaseNode):
         return self.dtype
 
     @override
-    def dump_message(self, message: Any) -> npt.NDArray | list[Any]:
+    def dump_message(self, message: Any) -> ArrayValue:
         if isinstance(message, np.ndarray):
             assert message.dtype.kind != "O"
             return message
-        return [self.item_node.dump_message(item) for item in message]
+        return cast(ArrayValue, [self.item_node.dump_message(item) for item in message])
 
     @override
     def to_dataframe_dtype(self) -> pl.DataType:
@@ -197,11 +203,11 @@ class ListNode(BaseNode):
         return f"{self.item_node.dtype}[]"
 
     @override
-    def dump_message(self, message: Any) -> npt.NDArray | list[Any]:
+    def dump_message(self, message: Any) -> ListValue:
         if isinstance(message, np.ndarray):
             assert message.dtype.kind != "O"
             return message
-        return [self.item_node.dump_message(item) for item in message]
+        return cast(ListValue, [self.item_node.dump_message(item) for item in message])
 
     @override
     def to_dataframe_dtype(self) -> pl.DataType:

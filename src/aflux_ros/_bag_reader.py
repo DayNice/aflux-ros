@@ -82,7 +82,7 @@ class BagReader:
             assert hasattr(message, "__msgtype__") and isinstance(message.__msgtype__, str)
             yield timestamp, message
 
-    def dump_messages(self, topic: str) -> Iterator[tuple[int, Any]]:
+    def dump_messages(self, topic: str) -> Iterator[tuple[int, dict[str, Any]]]:
         """Yield `(timestamp_ns, message_dict)` pairs for each message on `topic`."""
         node = self.get_message_node(topic)
         for timestamp, message in self.get_messages(topic):
