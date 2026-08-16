@@ -2,6 +2,7 @@ from abc import ABCMeta, abstractmethod
 from typing import Any, override
 
 import numpy as np
+import numpy.typing as npt
 import polars as pl
 from rosbags.interfaces import Nodetype, Typestore
 from rosbags.interfaces.typing import Basename, FieldDesc
@@ -47,7 +48,7 @@ class BaseNode(metaclass=ABCMeta):
     def __eq__(self, other: object) -> bool:
         if isinstance(other, self.__class__):
             return hash(self) == hash(other)
-        raise NotImplementedError
+        return NotImplemented
 
     @abstractmethod
     def dump_message(self, message: Any) -> Any: ...
@@ -144,7 +145,7 @@ class ArrayNode(BaseNode):
         return self.dtype
 
     @override
-    def dump_message(self, message: Any) -> np.ndarray | list[Any]:
+    def dump_message(self, message: Any) -> npt.NDArray | list[Any]:
         if isinstance(message, np.ndarray):
             return message
         return [self.item_node.dump_message(item) for item in message]
@@ -181,7 +182,7 @@ class ListNode(BaseNode):
         return f"{self.item_node.dtype}[]"
 
     @override
-    def dump_message(self, message: Any) -> list[Any]:
+    def dump_message(self, message: Any) -> npt.NDArray | list[Any]:
         if isinstance(message, np.ndarray):
             return message
         return [self.item_node.dump_message(item) for item in message]
