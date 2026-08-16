@@ -1,4 +1,4 @@
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from functools import cached_property
 from pathlib import Path
 from types import TracebackType
@@ -19,14 +19,21 @@ from ._types import TopicInfo
 class BagReader:
     def __init__(
         self,
-        bag_parent_dir: str | Path,
-        typestore: Typestore | None = None,
+        bag_dir: str | Path | Iterable[str | Path],
+        *,
+        fallback_typestore: Typestore | None = None,
     ):
-        self._bag_parent_dir = Path(bag_parent_dir)
-        self._bag_dirs = sorted(el.parent for el in self._bag_parent_dir.rglob("metadata.yaml"))
-        if typestore is None:
-            typestore = get_typestore(Stores.LATEST)
-        self._reader = AnyReader(self._bag_dirs, default_typestore=typestore)
+        if isinstance(bag_dir, str | Path):
+            self._bag_dirs = [Path(bag_dir)]
+        else:
+            self._bag_dirs = [Path(p) for p in bag_dir]
+
+        if fallback_typestore is None:
+            self._fallback_typestore = get_typestore(Stores.LATEST)
+        else:
+            self._fallback_typestore = fallback_typestore
+
+        self._reader = AnyReader(self._bag_dirs, default_typestore=self._fallback_typestore)
         self._reader.open()
 
     @cached_property

@@ -56,3 +56,24 @@ class TestBagReader:
             for i in range(10):
                 assert timestamps[i] == i * 1_000_000_000
                 assert values[i] == float(i)
+
+    def test_multiple_bag_dirs(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        typestore = get_typestore(Stores.LATEST)
+        bag1 = tmp_path_factory.mktemp("rosbag1") / "bag1"
+        bag2 = tmp_path_factory.mktemp("rosbag2") / "bag2"
+
+        with Writer(bag1, version=8) as writer:
+            conn = writer.add_connection("/topic1", "std_msgs/msg/Float64", typestore=typestore)
+            msg = typestore.types["std_msgs/msg/Float64"](data=1.0)
+            writer.write(conn, 100, typestore.serialize_cdr(msg, "std_msgs/msg/Float64"))
+
+        with Writer(bag2, version=8) as writer:
+            conn = writer.add_connection("/topic2", "std_msgs/msg/Float64", typestore=typestore)
+            msg = typestore.types["std_msgs/msg/Float64"](data=2.0)
+            writer.write(conn, 200, typestore.serialize_cdr(msg, "std_msgs/msg/Float64"))
+
+        with BagReader([bag1, bag2]) as reader:
+            assert "/topic1" in reader.topic_info_map
+            assert "/topic2" in reader.topic_info_map
+            assert reader.topic_info_map["/topic1"].num_messages == 1
+            assert reader.topic_info_map["/topic2"].num_messages == 1
