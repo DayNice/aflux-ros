@@ -79,6 +79,7 @@ class BagReader:
         """Yield `(timestamp_ns, message)` pairs for each message on `topic`."""
         for timestamp, msgtype, rawdata in self.get_raw_bytes(topic):
             message = self._reader.deserialize(rawdata, msgtype)
+            assert hasattr(message, "__msgtype__") and isinstance(message.__msgtype__, str)
             yield timestamp, message
 
     def dump_messages(self, topic: str) -> Iterator[tuple[int, Any]]:
