@@ -1,7 +1,9 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import polars as pl
+import pytest
 from rosbags.typesys.store import Typestore
 
 import aflux_ros
@@ -143,3 +145,36 @@ class TestConvertMessagesIntoSeries:
                 {"value": 3.0, "values": [3.1]},
             ],
         ]
+
+    def test_raw_message_is_dumped_before_nested_conversion(self) -> None:
+        inner_node = StructNode(
+            "test_msgs/msg/Inner",
+            {"value": LeafNode("float64"), "values": ListNode(LeafNode("float64"))},
+        )
+        node = StructNode("test_msgs/msg/Outer", {"inners": ListNode(inner_node)})
+        messages = [
+            SimpleNamespace(
+                __msgtype__="test_msgs/msg/Outer",
+                inners=[
+                    SimpleNamespace(
+                        __msgtype__="test_msgs/msg/Inner",
+                        value=1.0,
+                        values=np.array([1.1, 1.2]),
+                    )
+                ],
+            )
+        ]
+
+        ser = aflux_ros.convert_messages_into_series(node, messages)
+
+        assert ser.dtype == node.to_dataframe_dtype()
+        assert ser.to_list() == [
+            {"inners": [{"value": 1.0, "values": [1.1, 1.2]}]},
+        ]
+
+    def test_raw_message_type_must_match_node(self) -> None:
+        node = StructNode("test_msgs/msg/Point", {"x": LeafNode("float64")})
+        message = SimpleNamespace(__msgtype__="test_msgs/msg/Other", x=1.0)
+
+        with pytest.raises(ValueError, match="Message type should match given node"):
+            aflux_ros.convert_messages_into_series(node, [message])

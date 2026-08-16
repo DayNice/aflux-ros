@@ -55,19 +55,34 @@ def convert_messages_into_series(
     name: str = "",
 ) -> pl.Series:
     """Convert messages into a Polars series."""
-    messages = list(messages)
-    if len(messages) == 0:
+    dumped_messages = []
+    for message in messages:
+        msgtype = getattr(message, "__msgtype__", None)
+
+        if msgtype is None:
+            dumped_message = message
+        else:
+            assert isinstance(msgtype, str), "msgtype should be an instance of str"
+            if msgtype != str(message_node):
+                msg = f"Message type should match given node: {message_node=!r}, {msgtype=!r}"
+                raise ValueError(msg)
+
+            dumped_message = message_node.dump_message(message)
+
+        dumped_messages.append(dumped_message)
+
+    if len(dumped_messages) == 0:
         return pl.Series(name, [], dtype=message_node.to_dataframe_dtype())
 
     match message_node:
         case LeafNode():
-            return pl.Series(name, messages, dtype=message_node.to_dataframe_dtype())
+            return pl.Series(name, dumped_messages, dtype=message_node.to_dataframe_dtype())
         case StructNode():
-            return _convert_struct_messages_into_series(message_node, messages, name=name)
+            return _convert_struct_messages_into_series(message_node, dumped_messages, name=name)
         case ArrayNode():
-            return _convert_array_messages_into_series(message_node, messages, name=name)
+            return _convert_array_messages_into_series(message_node, dumped_messages, name=name)
         case ListNode():
-            return _convert_list_messages_into_series(message_node, messages, name=name)
+            return _convert_list_messages_into_series(message_node, dumped_messages, name=name)
         case _:
             assert_never(message_node)
 
