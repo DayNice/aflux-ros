@@ -9,6 +9,9 @@ from rosbags.highlevel import AnyReader
 from rosbags.typesys import Stores, get_typestore
 from rosbags.typesys.store import Typestore
 
+from ._message_helper import (
+    convert_messages_into_series,
+)
 from ._message_node import (
     StructNode,
     parse_message_type_into_node,
@@ -78,7 +81,7 @@ class BagReader:
             message = self._reader.deserialize(rawdata, msgtype)
             yield timestamp, message
 
-    def dump_messages(self, topic: str) -> Iterator[tuple[int, dict[str, Any]]]:
+    def dump_messages(self, topic: str) -> Iterator[tuple[int, Any]]:
         """Yield `(timestamp_ns, message_dict)` pairs for each message on `topic`."""
         node = self.get_message_node(topic)
         for timestamp, message in self.get_messages(topic):
@@ -91,19 +94,15 @@ class BagReader:
         It has a struct column named after the topic.
         """
         node = self.get_message_node(topic)
-        schema = pl.Schema(
-            {
-                "timestamp": pl.Int64,
-                topic: node.to_dataframe_dtype(),
-            }
-        )
+        message_tuples = list(self.dump_messages(topic))
 
-        records: list[dict[str, Any]] = []
-        for timestamp, message in self.dump_messages(topic):
-            record = {"timestamp": timestamp, topic: message}
-            records.append(record)
+        timestamps = [timestamp for timestamp, _ in message_tuples]
+        timestamp_ser = pl.Series("timestamp", timestamps, dtype=pl.Int64)
 
-        return pl.from_dicts(records, schema=schema)
+        messages = [message for _, message in message_tuples]
+        message_ser = convert_messages_into_series(node, messages, name=topic)
+
+        return pl.DataFrame([timestamp_ser, message_ser])
 
     def close(self) -> None:
         """Close the opened bags."""

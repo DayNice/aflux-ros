@@ -159,6 +159,7 @@ class ArrayNode(BaseNode):
     @override
     def dump_message(self, message: Any) -> npt.NDArray | list[Any]:
         if isinstance(message, np.ndarray):
+            assert message.dtype.kind != "O"
             return message
         return [self.item_node.dump_message(item) for item in message]
 
@@ -198,6 +199,7 @@ class ListNode(BaseNode):
     @override
     def dump_message(self, message: Any) -> npt.NDArray | list[Any]:
         if isinstance(message, np.ndarray):
+            assert message.dtype.kind != "O"
             return message
         return [self.item_node.dump_message(item) for item in message]
 

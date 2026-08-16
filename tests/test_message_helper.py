@@ -1,8 +1,11 @@
 from pathlib import Path
 
+import numpy as np
+import polars as pl
 from rosbags.typesys.store import Typestore
 
 import aflux_ros
+from aflux_ros import ArrayNode, LeafNode, ListNode
 
 
 class TestMessageHelper:
@@ -31,3 +34,30 @@ class TestMessageHelper:
         assert len(fields) == 2
         assert fields[0][0] == "x"
         assert fields[1][0] == "y"
+
+
+class TestConvertMessagesIntoSeries:
+    def test_polars_ignores_explicit_dtype_in_favor_of_numpy_derived_value(self):
+        messages = [np.array([1, 2]), np.array([3, 4])]
+
+        explicit_dtype = pl.Array(pl.Float64, 2)
+        ser = pl.Series(messages, dtype=explicit_dtype)
+        assert ser.dtype != explicit_dtype, "Polars has fixed issue."
+
+        explicit_dtype = pl.List(pl.Int64)
+        ser = pl.Series(messages, dtype=explicit_dtype)
+        assert ser.dtype != explicit_dtype, "Polars has fixed issue."
+
+    def test_array(self):
+        messages = [np.array([1, 2]), np.array([3, 4])]
+
+        array_node = ArrayNode(LeafNode("float64"), 2)
+        ser = aflux_ros.convert_messages_into_series(array_node, messages)
+        assert ser.dtype == array_node.to_dataframe_dtype()
+
+    def test_list(self):
+        messages = [np.array([1, 2]), np.array([3, 4])]
+
+        list_node = ListNode(LeafNode("float64"))
+        ser = aflux_ros.convert_messages_into_series(list_node, messages)
+        assert ser.dtype == list_node.to_dataframe_dtype()
