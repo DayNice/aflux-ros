@@ -6,6 +6,11 @@ from rosbags.typesys.store import Typestore
 
 
 def read_message_schema_dir(message_schema_dir: str | Path) -> dict[str, str]:
+    """Read all `.msg` files under a directory into a message schema map.
+
+    Each key is the file's relative path with the `.msg` suffix removed.
+    For example, `my_msgs/msg/Point.msg` becomes `my_msgs/msg/Point`.
+    """
     message_schema_dir = Path(message_schema_dir)
 
     message_schema_map: dict[str, str] = {}
@@ -22,6 +27,7 @@ def register_message_schema_map(
     typestore: Typestore,
     message_schema_map: dict[str, str],
 ) -> None:
+    """Register a message schema map to a typestore."""
     add_types: Typesdict = {}
     for message_type, message_schema in message_schema_map.items():
         add_types.update(get_types_from_msg(message_schema, message_type))
@@ -32,5 +38,6 @@ def register_message_schema_dir(
     typestore: Typestore,
     message_schema_dir: str | Path,
 ) -> None:
+    """Read and register all `.msg` files under a directory."""
     message_schema_map = read_message_schema_dir(message_schema_dir)
     register_message_schema_map(typestore, message_schema_map)

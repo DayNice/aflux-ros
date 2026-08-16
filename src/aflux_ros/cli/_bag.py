@@ -26,6 +26,7 @@ def topics(
     *,
     message_schema_dir: InputDir | None = None,
 ):
+    """Print topic metadata as JSON."""
     with _get_bag_reader(bag_dir, message_schema_dir) as bag_reader:
         topic_info_map = bag_reader.topic_info_map.copy()
 
@@ -41,6 +42,7 @@ def message_dataframe(
     *,
     message_schema_dir: InputDir | None = None,
 ):
+    """Write messages from a topic to a Parquet file."""
     with _get_bag_reader(bag_dir, message_schema_dir) as bag_reader:
         df = bag_reader.get_message_dataframe(topic)
         df.write_parquet(output_file)

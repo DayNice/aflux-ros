@@ -34,6 +34,8 @@ def _basename_to_dataframe_dtype(basename: Basename) -> pl.DataType:
 
 
 class BaseNode(metaclass=ABCMeta):
+    """Represent one level of a ROS message schema tree."""
+
     dtype: str
 
     @abstractmethod
@@ -51,13 +53,19 @@ class BaseNode(metaclass=ABCMeta):
         return NotImplemented
 
     @abstractmethod
-    def dump_message(self, message: Any) -> Any: ...
+    def dump_message(self, message: Any) -> Any:
+        """Convert a ROS message into a Python object."""
+        ...
 
     @abstractmethod
-    def to_dataframe_dtype(self) -> pl.DataType: ...
+    def to_dataframe_dtype(self) -> pl.DataType:
+        """Return the node's Polars data type."""
+        ...
 
 
 class LeafNode(BaseNode):
+    """Represent a primitive ROS message field."""
+
     __match_args__ = ("dtype", "max_length")
 
     def __init__(self, dtype: Basename, max_length: int = 0) -> None:
@@ -88,6 +96,8 @@ class LeafNode(BaseNode):
 
 
 class StructNode(BaseNode):
+    """Represent a ROS message with named fields."""
+
     __match_args__ = ("dtype", "field_node_map")
 
     def __init__(self, dtype: str, field_node_map: "dict[str, MessageNode]") -> None:
@@ -122,6 +132,8 @@ class StructNode(BaseNode):
 
 
 class ArrayNode(BaseNode):
+    """Represent a fixed-length field sequence."""
+
     __match_args__ = ("item_node", "size")
 
     def __init__(self, item_node: LeafNode | StructNode, size: int) -> None:
@@ -157,6 +169,8 @@ class ArrayNode(BaseNode):
 
 
 class ListNode(BaseNode):
+    """Represent a variable-length field sequence."""
+
     __match_args__ = ("item_node", "max_size")
 
     def __init__(self, item_node: LeafNode | StructNode, max_size: int = 0) -> None:
@@ -197,6 +211,7 @@ type MessageNode = LeafNode | StructNode | ArrayNode | ListNode
 
 
 def parse_message_type_into_node(typestore: Typestore, message_type: str) -> StructNode:
+    """Build a schema tree for a ROS message type."""
     msgdef = typestore.get_msgdef(message_type)
     field_node_map: dict[str, MessageNode] = {}
     for field_name, field_value in msgdef.fields:
@@ -206,6 +221,10 @@ def parse_message_type_into_node(typestore: Typestore, message_type: str) -> Str
 
 
 def parse_field_value_into_node(typestore: Typestore, field_value: FieldDesc) -> MessageNode:
+    """Build a message node from a `rosbags` field definition.
+
+    The field definition must come from `Typestore.get_msgdef()`.
+    """
     match field_value:
         case (Nodetype.BASE, (dtype, max_length)):
             return LeafNode(dtype, max_length)
